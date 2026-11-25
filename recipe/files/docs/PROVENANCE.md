@@ -1,4 +1,4 @@
-# Provenance — authentik (`2026.8.5-CE-ubuntu24.04-r7`)
+# Provenance — authentik (`2026.8.5-CE-ubuntu24.04-r8`)
 
 Every item below is copied from a record in this archive; the record is named in brackets.
 
@@ -13,18 +13,18 @@ Every item below is copied from a record in this archive; the record is named in
 
 - Method: `source-rebuild-python`; base image `ubuntu:24.04`
 - Compiled with `--network=none` from vendored source, dependencies and base images; BuildKit pinned to `moby/buildkit:v0.31.2` (shipped in `toolchain/`).
-- SOURCE_DATE_EPOCH: `1795407184` [`SOURCE_DATE_EPOCH.txt`]
+- SOURCE_DATE_EPOCH: `1795543224` [`SOURCE_DATE_EPOCH.txt`]
 - Frozen inputs: [`docs/provenance/FREEZE_MANIFEST.json`], build recipe: [`docs/provenance/BUILD_RECIPE.json`].
 
 ## Output
 
-- Published image: `readystack/authentik:2026.8.5-CE-ubuntu24.04-r7` — index digest `sha256:675350e3afa51c114a8ec7d8adcc14c1bb0721aed98136e05861b1aab646b1b3` [`docs/provenance/LOCKED_DIGEST.txt`]
-- linux/amd64 image digest `sha256:7741676306560bd8e052d1b9468872376109a691d582d4534b39ef1d7fcae8e7` — reproduced from this archive before publishing [`docs/provenance/REPRO_VERIFICATION.json`].
+- Published image: `readystack/authentik:2026.8.5-CE-ubuntu24.04-r8` — index digest `sha256:7007d435e8f01070244a37872dbefed0acaca1d466764ba6ed557aee073c2690` [`docs/provenance/LOCKED_DIGEST.txt`]
+- linux/amd64 image digest `sha256:ca993b4c57f308d8769039d6124cdc0151ad7fa279d2439a009be0b623cd819b` — reproduced from this archive before publishing [`docs/provenance/REPRO_VERIFICATION.json`].
 
 ## Attestations and signature
 
 - SBOM + SLSA provenance attached to the image: attached: an SPDX SBOM and SLSA v1 provenance [`docs/provenance/SCOUT_VERDICT.json`]
-- cosign signature by the ReadyStack release key: verified before publishing. Check it: `cosign verify --key https://readystack.dev/keys/cosign.pub readystack/authentik:2026.8.5-CE-ubuntu24.04-r7`
+- cosign signature by the ReadyStack release key: verified before publishing. Check it: `cosign verify --key https://readystack.dev/keys/cosign.pub readystack/authentik:2026.8.5-CE-ubuntu24.04-r8`
 
 ## Pinned inputs, and why
 
@@ -32,5 +32,5 @@ Every item below is copied from a record in this archive; the record is named in
 
 ## Build trail
 
-- How this release passed through the ReadyStack harness, record by record (every chain, drive, stage, review round, defect and check, each naming the record it is copied from): `ReadyStack-authentik-2026.8.5-CE-ubuntu24.04-r7.trail.json`, published beside this archive and signed with the release key (`ReadyStack-authentik-2026.8.5-CE-ubuntu24.04-r7.trail.json.sigstore`), and readable at https://readystack.dev/products/authentik/trail/2026.8.5-CE-ubuntu24.04-r7.
+- How this release passed through the ReadyStack harness, record by record (every chain, drive, stage, review round, defect and check, each naming the record it is copied from): `ReadyStack-authentik-2026.8.5-CE-ubuntu24.04-r8.trail.json`, published beside this archive and signed with the release key (`ReadyStack-authentik-2026.8.5-CE-ubuntu24.04-r8.trail.json.sigstore`), and readable at https://readystack.dev/products/authentik/trail/2026.8.5-CE-ubuntu24.04-r8.
 

@@ -64,7 +64,7 @@ CMD ["allinone"]
 # the set a generated kit carries (gen_dockerfile.label_lines). Written by scripts/kit_migrations.py;
 # scripts/retarget.py re-renders it with every retarget. Never edit it by hand.
 LABEL org.opencontainers.image.title="authentik"
-LABEL org.opencontainers.image.version="2026.8.5-CE-ubuntu24.04-r7"
+LABEL org.opencontainers.image.version="2026.8.5-CE-ubuntu24.04-r8"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.source="https://github.com/goauthentik/authentik"
 LABEL org.opencontainers.image.vendor="ReadyStack.dev"
