@@ -1,0 +1,271 @@
+{
+ "schema": "readystack.recipe.v1",
+ "slug": "authentik",
+ "tag": "2026.8.5-CE-ubuntu24.04-r7",
+ "tarball": "ReadyStack-authentik-2026.8.5-CE-ubuntu24.04-r7.tar.gz",
+ "tarball_sha256": "589f574b3bcd87550845aab0ae2b114785d5ec2d31bd694ec502078a6fb66a57",
+ "kit_root": "2026.8.5-CE-ubuntu24.04-r7",
+ "generated_at": "2026-11-23T06:48:31Z",
+ "generator": "KitForge release/recipe_publish.py",
+ "dockerfile": "Dockerfile.offline.pinned",
+ "build_script": "BUILD_OFFLINE.sh",
+ "preview_lines": 24,
+ "pins": {
+  "upstream": {
+   "repo": "https://github.com/goauthentik/authentik",
+   "ref": "version/2026.8.5",
+   "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+   "url": "https://github.com/goauthentik/authentik/tree/4ec0d19b98da3c329781894cd550da95d3033954",
+   "from": "docs/provenance/BUILD_RECIPE.json"
+  },
+  "fetches": [
+   {
+    "kind": "git",
+    "url": "https://github.com/goauthentik/authentik",
+    "ref": "version/${AUTHENTIK_VERSION}"
+   },
+   {
+    "kind": "http",
+    "url": "https://www.python.org/ftp/python/3.14.10/Python-3.14.10.tar.xz"
+   },
+   {
+    "kind": "http",
+    "url": "https://github.com/python/cpython/commit/7d9da9208fc3dc126bebca6844dfe312afc43c34.diff"
+   },
+   {
+    "kind": "http",
+    "url": "https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init"
+   }
+  ],
+  "bases": [
+   {
+    "ref": "ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289",
+    "image": "ubuntu:24.04",
+    "digest": "sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289"
+   }
+  ],
+  "toolchain": {
+   "buildkit": "moby/buildkit:v0.31.2",
+   "buildkit_image_digest": "sha256:e0e67ea9c4bb07bdef683e29f70f3b623d1eb9c82274a9ec04e6bb0511449fb0"
+  },
+  "build_method": "source-rebuild-python",
+  "source_date_epoch": 1795407184,
+  "source_date_epoch_utc": "2026-11-23T04:13:04Z",
+  "target": {
+   "image_manifest_digest": "sha256:7741676306560bd8e052d1b9468872376109a691d582d4534b39ef1d7fcae8e7",
+   "config_digest": "sha256:fae2c3be7a2421c7b67a431d1e9637e9de5cbb5be6e4f0c94171f9139522a406",
+   "image": "readystack/authentik:2026.8.5-CE-ubuntu24.04-r7"
+  },
+  "checksummed_files": 6289
+ },
+ "files": [
+  {
+   "path": "BASES.tsv",
+   "size": 121,
+   "sha256": "c506d719c30d576fe42dd46d1cf2a9a05f4f3f364b41e02e4ffad3a1fc19500e",
+   "lines": 1,
+   "public": "full"
+  },
+  {
+   "path": "BUILD_OFFLINE.sh",
+   "size": 8856,
+   "sha256": "6ab4f08a6ec775b32d854f03413b30ecfe555ddba78cf0de956235f5a2a39542",
+   "lines": 162,
+   "public": "preview",
+   "preview_lines": 24
+  },
+  {
+   "path": "CHECKSUMS.sha256",
+   "size": 932351,
+   "sha256": "17c464c2f4aa0190f2b0c7613ea0427589fa58256a317ab003600647538a8d8e",
+   "lines": 6289,
+   "public": "account",
+   "stored": "gzip"
+  },
+  {
+   "path": "DOCKERFILE_NAME.txt",
+   "size": 26,
+   "sha256": "9aadd1ede68e016a6f163c97befc5ff2fcdc8ebd4f84b108dba63cb195fa8c84",
+   "lines": 1,
+   "public": "full"
+  },
+  {
+   "path": "Dockerfile",
+   "size": 8038,
+   "sha256": "b1048034e21460cb286006dc877c3e0b7c6781abc93f28c58a522f17f4752d11",
+   "lines": 76,
+   "public": "account"
+  },
+  {
+   "path": "Dockerfile.offline",
+   "size": 8038,
+   "sha256": "b1048034e21460cb286006dc877c3e0b7c6781abc93f28c58a522f17f4752d11",
+   "lines": 76,
+   "public": "account"
+  },
+  {
+   "path": "Dockerfile.offline.pinned",
+   "size": 8038,
+   "sha256": "b1048034e21460cb286006dc877c3e0b7c6781abc93f28c58a522f17f4752d11",
+   "lines": 76,
+   "public": "preview",
+   "preview_lines": 24
+  },
+  {
+   "path": "Dockerfile.vendor",
+   "size": 24590,
+   "sha256": "f4c2a7df62f8687865b06c48b8eeb44cb37df0b20b80e1612b5fcf53895a50e0",
+   "lines": 285,
+   "public": "account"
+  },
+  {
+   "path": "FILE_MODES.tsv",
+   "size": 619952,
+   "sha256": "448a6e95498bd516b3d9a5db0a3449eaa1816ad6cc5baefa1b66b0a0b7740e70",
+   "lines": 7609,
+   "public": "account",
+   "stored": "gzip"
+  },
+  {
+   "path": "MANIFEST.txt",
+   "size": 504729,
+   "sha256": "21e40dbd3df357e2cec61dfbe818def46395a2685d756bdfc0892d326229a5ab",
+   "lines": 6291,
+   "public": "account",
+   "stored": "gzip"
+  },
+  {
+   "path": "README.md",
+   "size": 3320,
+   "sha256": "9ba0a47a2d5ba09641102c12a078a16bcf29d200bcf48079e1e1428a32903178",
+   "lines": 39,
+   "public": "account"
+  },
+  {
+   "path": "SOURCE_DATE_EPOCH.txt",
+   "size": 11,
+   "sha256": "ee256e5ff4620ab1a439104d1c1955ac92d60c37c85f92629fca1d994a44a214",
+   "lines": 1,
+   "public": "full"
+  },
+  {
+   "path": "TARGET_DIGEST.txt",
+   "size": 441,
+   "sha256": "e8863093b39d51f2411377e50cac48e17cc4fbc91ba02f9c035cebd5e53f36bf",
+   "lines": 8,
+   "public": "full"
+  },
+  {
+   "path": "VERIFY_OFFLINE.sh",
+   "size": 10153,
+   "sha256": "3e8184ea230cfd8f41f977e26be6bf7bd03112c396c517837ce0c7de4f7399dd",
+   "lines": 165,
+   "public": "account"
+  },
+  {
+   "path": "docs/PROVENANCE.md",
+   "size": 2664,
+   "sha256": "02d533ced2835438f6c5c37d6559a2d51108619bfb3161b78e19cc72d65937a8",
+   "lines": 36,
+   "public": "account"
+  },
+  {
+   "path": "docs/REBUILD.md",
+   "size": 6169,
+   "sha256": "4972ee8d7038b9cbae0b85a6c65887ee71080878b921ff3fa3a7516e95bb23e9",
+   "lines": 62,
+   "public": "account"
+  },
+  {
+   "path": "docs/VERIFY.md",
+   "size": 2045,
+   "sha256": "ee60cbe302ef80386f027198a343e47a16f0c8b98bdc715fa94dc479a36e27df",
+   "lines": 34,
+   "public": "account"
+  },
+  {
+   "path": "docs/provenance/BASE_IMAGE_DIGESTS.lock",
+   "size": 52,
+   "sha256": "a879c649163aa79790b7678830262ff8c37f183f3011ddb34df0b3358d764fe7",
+   "lines": 2,
+   "public": "full"
+  },
+  {
+   "path": "docs/provenance/BUILD_RECIPE.json",
+   "size": 5252,
+   "sha256": "a2e5a76a415fd1bcc66b3f53c753ea908c6b426f79c9eef9a2e9d4016765c9f0",
+   "lines": 39,
+   "public": "account"
+  },
+  {
+   "path": "docs/provenance/CUSTODY_INPUTS.json",
+   "size": 892,
+   "sha256": "bde01479de4ebcce8fa4663aa25da344fce218cfbb53736b45f6f02883ec2a26",
+   "lines": 24,
+   "public": "account"
+  },
+  {
+   "path": "docs/provenance/SOURCE_FILE_MANIFEST.json",
+   "size": 280994,
+   "sha256": "d1d4748677660219002ca85199ce921c665b484f9124094e67d43cf6adf4b92a",
+   "lines": 5007,
+   "public": "account",
+   "stored": "gzip"
+  },
+  {
+   "path": "docs/provenance/SOURCE_TREE_HASH.json",
+   "size": 323,
+   "sha256": "659aeb74ec6a8076bb90c245d7450d7360c3076eedf4d23f8c8971ce09bac70d",
+   "lines": 9,
+   "public": "full"
+  },
+  {
+   "path": "docs/provenance/SYSTEM_PINNING.lock",
+   "size": 1,
+   "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+   "lines": 1,
+   "public": "account"
+  },
+  {
+   "path": "docs/provenance/TOOLCHAIN.lock",
+   "size": 2256,
+   "sha256": "55cedd0d038d06c0879aec05ade86a76b3550ff9c0022d045a88ea4a0d3b5427",
+   "lines": 45,
+   "public": "account"
+  },
+  {
+   "path": "rebuild.json",
+   "size": 1217,
+   "sha256": "b4df55b1525aa46eaa9480add8db35b94ba2c5bc1a23649bdac8685a448845db",
+   "lines": 31,
+   "public": "account"
+  },
+  {
+   "path": "toolchain/BUILDKIT_TAG.txt",
+   "size": 22,
+   "sha256": "fcd530eeb02b063d2f047adad6eef896422a8e8d558513e5f09b2a262be32573",
+   "lines": 1,
+   "public": "full"
+  }
+ ],
+ "skipped": [],
+ "kit_adds": {
+  "bases": {
+   "files": 5,
+   "bytes": 29796854
+  },
+  "docs": {
+   "files": 6177,
+   "bytes": 108208850
+  },
+  "toolchain": {
+   "files": 1,
+   "bytes": 111529472
+  },
+  "vendored": {
+   "files": 82,
+   "bytes": 489238689
+  }
+ },
+ "redacted_files": 0
+}

@@ -1,0 +1,285 @@
+# =====================================================================
+# authentik 2026.8.5 (MIT core; EE components STRIPPED) VENDOR build.
+# Modeled on upstream lifecycle/container/Dockerfile with ReadyStack substitutions:
+#  - digest-pinned ubuntu:24.04 + CPython 3.14 compiled from python.org's source against Ubuntu's libraries
+#    (the offline build compiles it again, network off) instead of ghcr FIPS images; the Go router builds on
+#    Debian 12 (glibc 2.36 <= the runtime's 2.39)
+#  - authentik/enterprise/ (EE-licensed, not OSI) REMOVED at source stage; tests/ dropped;
+#    tenants API stays disabled (default) — the one unguarded enterprise lookup is unreachable
+#  - GeoIP stage replaced by an empty /geoip (feature degrades gracefully, offline-safe)
+#  - 4 toolchains: Lit/npm web build, Go router (CGO), Rust supervisor (pyo3->libpython3.14,
+#    built on the python base like upstream), Python via uv sync --locked
+# Exports the built filesystem as tars for the hermetic offline reassembly (erpnext pattern).
+# =====================================================================
+ARG AUTHENTIK_VERSION=2026.8.5
+# The tag must resolve to this commit (version/2026.8.5, 2026-10-21T11:16:54Z): a moved tag fails the build.
+ARG AUTHENTIK_COMMIT=4ec0d19b98da3c329781894cd550da95d3033954
+
+# ---- source (enterprise strip happens HERE, before anything consumes the tree) ----
+# alpine/git 2.54.0 by its index digest (Docker Hub's registry, read 2026-11-02): only a git client for the clone below;
+# the tag and the commit check below pin the source, the digest pins the client that fetched it.
+FROM alpine/git:2.54.0@sha256:ac6c828f15d82775d204d3d75112e1d34af8945da80ccf922713c9891ba68e7a AS src
+ARG AUTHENTIK_VERSION
+ARG AUTHENTIK_COMMIT
+RUN git clone --depth 1 --branch version/${AUTHENTIK_VERSION} https://github.com/goauthentik/authentik /src \
+ && test "$(git -C /src rev-parse HEAD)" = "${AUTHENTIK_COMMIT}" \
+ && rm -rf /src/.git /src/authentik/enterprise /src/tests \
+ && sed -i 's/^        return _dummy$/        return type("_dummy_" + path.replace(".", "_"), (), {})/' /src/authentik/lib/utils/reflection.py \
+ && grep -q 'return type("_dummy_"' /src/authentik/lib/utils/reflection.py \
+ && sed -i 's/^            \*\*thread_kwargs,$/            **(thread_kwargs or {}),/' /src/authentik/events/middleware.py \
+ && ! grep -q '^            \*\*thread_kwargs,$' /src/authentik/events/middleware.py
+# ^ The enterprise audit middleware (stripped above) always passed thread_kwargs={}; the base m2m_changed handler
+#   defaults it to None and unpacks it, so without the EE code every group-membership change (add_user,
+#   remove_user, PATCH of users/groups) answered HTTP 500 "argument after ** must be a mapping, not NoneType"
+#   (live 2026.8.2-CE-trixie-r1; upstream's image returned 204).
+#   2026.8.4 (2026-10-20) and 2026.8.5 contain the same fix upstream (`**(thread_kwargs or {})`), so the sed above no longer matches and the grep guard passes; kept as a no-op for older tags.
+
+# ---- web (Lit) ----
+FROM docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS node-builder
+ENV NODE_ENV=production
+WORKDIR /work/web
+COPY --from=src /src/packages /work/packages
+COPY --from=src /src/web /work/web
+COPY --from=src /src/package.json /work/package.json
+COPY --from=src /src/pnpm-lock.yaml /work/pnpm-lock.yaml
+COPY --from=src /src/pnpm-workspace.yaml /work/pnpm-workspace.yaml
+COPY --from=src /src/website /work/website
+# 2026.8.4 and 2026.8.5 declare packageManager pnpm@11.20.0 (2026.8.3 declared 12.4.0); the pin below follows package.json (preflight check).
+# 2026.8.2 MIGRATED npm -> pnpm: it ships pnpm-lock.yaml + pnpm-workspace.yaml and no
+# package-lock.json, so `npm ci` fails with EUSAGE ("can only install with an existing
+# package-lock.json"). Install at the WORKSPACE ROOT, then build the web package.
+RUN corepack enable && corepack prepare pnpm@11.20.0 --activate \
+ && cd /work && pnpm install --frozen-lockfile \
+ && cd /work/web && pnpm run build && pnpm run build:sfe
+
+# ---- go router (embedded outpost; spawns gunicorn at runtime) ----
+# authentik 2026.8.2 go.mod requires go >= 1.27.0; the 2026.5.5-era pin was 1.26.x.
+# CGO_ENABLED=1 links glibc dynamically: build against an OLDER glibc than the runtime's (Debian 12's 2.36 <
+# Ubuntu 24.04's 2.39), never a newer one (trixie's 2.41 can emit symbol versions noble does not have).
+FROM docker.io/library/golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS go-builder
+WORKDIR /go/src/goauthentik.io
+COPY --from=src /src/go.mod /src/go.sum ./
+RUN go mod download
+COPY --from=src /src/cmd ./cmd
+COPY --from=src /src/authentik/lib ./authentik/lib
+COPY --from=src /src/web/static.go ./web/static.go
+COPY --from=node-builder /work/web/robots.txt ./web/robots.txt
+COPY --from=node-builder /work/web/security.txt ./web/security.txt
+COPY --from=src /src/internal ./internal
+COPY --from=src /src/packages/client-go ./packages/client-go
+# CVE FLOORS, never downgrades (a `go get m@vX` SETS the version: x/net@v0.56.0 would have pulled
+# 2026.8.3's own v0.57.0 back down). floor() raises a module only when present AND older.
+# floor() fails closed (L-A133): `go list -mod=mod`, and only "not a known dependency" skips a module; any other
+# error (a missing go.sum entry after an earlier raise, the proxy unreachable) stops the step instead of skipping
+# every later floor, as caddy chain 741 did.
+RUN set -e; floor() { e=$(mktemp); cur=$(go list -mod=mod -m -f '{{.Version}}' "$1" 2>"$e") || \
+        { grep -q 'not a known dependency' "$e" && return 0; cat "$e" >&2; return 1; }; [ -n "$cur" ] || return 0; \
+      [ "$(printf '%s\n%s\n' "$cur" "$2" | sort -V | tail -1)" = "$cur" ] || go get "$1@$2"; }; \
+    floor golang.org/x/net v0.62.0; floor golang.org/x/text v0.41.0; floor google.golang.org/grpc v1.83.2; floor github.com/go-jose/go-jose/v4 v4.1.6; floor github.com/klauspost/compress v1.20.2; \
+    go mod tidy
+RUN CGO_ENABLED=1 GOFIPS140=latest go build -o /go/authentik-server ./cmd/server
+
+# ---- CPython 3.14.10 compiled from python.org's source against Ubuntu 24.04's own libraries (libssl3t64,
+#      libsqlite3-0, libexpat1, zlib1g, ... -- debs the scan sees and apt fixes). This stage only FETCHES the
+#      tarball (python.org's sha256, pinned in strategies/authentik.json source.python_runtime) and the build
+#      toolchain's debs; `cpython` compiles them with gen_dockerfile.cpython_build_cmd, and the offline build runs
+#      the same command on the same vendored inputs -- the interpreter that ships is compiled with the network off. ----
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS cpython-src
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /vendored-python && curl -fsSL --retry 3 -o /vendored-python/Python-3.14.10.tar.xz https://www.python.org/ftp/python/3.14.10/Python-3.14.10.tar.xz && \
+    echo "de414a57119abef52784d8993e341d53aed635fc2b05c2607d9f98a2c5b72032  /vendored-python/Python-3.14.10.tar.xz" | sha256sum -c - && \
+    curl -fsSL --retry 3 -o /vendored-python/cpython-3.14.10-7d9da92-fips-hashlib.diff https://github.com/python/cpython/commit/7d9da9208fc3dc126bebca6844dfe312afc43c34.diff && \
+    echo "125404bb224770a1f9120b88075b252b0536e9bc348c89a3e7fb9dd19868ed7d  /vendored-python/cpython-3.14.10-7d9da92-fips-hashlib.diff" | sha256sum -c -
+# a FRESH pinned base, nothing installed first: the closure is then complete for the equally fresh offline stage
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS cpython-debs
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get -y --download-only --no-install-recommends install \
+      build-essential pkg-config xz-utils libssl-dev zlib1g-dev libbz2-dev libsqlite3-dev libffi-dev liblzma-dev libzstd-dev uuid-dev libexpat1-dev libncurses-dev libreadline-dev && \
+    mkdir -p /debs && cp /var/cache/apt/archives/*.deb /debs/ && echo "vendored $(ls -1 /debs/*.deb | wc -l) CPython build debs"
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS cpython
+ARG SOURCE_DATE_EPOCH=1789678329
+ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
+COPY --from=cpython-debs /debs /tmp/cpython-debs
+COPY --from=cpython-src /vendored-python/Python-3.14.10.tar.xz /tmp/Python-3.14.10.tar.xz
+COPY --from=cpython-src /vendored-python/cpython-3.14.10-7d9da92-fips-hashlib.diff /tmp/cpython-3.14.10-7d9da92-fips-hashlib.diff
+RUN set --; for f in /tmp/cpython-debs/*.deb; do [ -e "$f" ] && set -- "$@" "$f"; done; \
+    for pass in 1 2 3 4 5; do [ $# -eq 0 ] || dpkg -i --skip-same-version "$@" >/dev/null 2>&1 && break; done; \
+    dpkg --configure -a && bad= && for d in "$@"; do p=$(dpkg-deb -f "$d" Package) v=$(dpkg-deb -f "$d" Version); \
+      case "$(dpkg-query -W -f='${Version} ${db:Status-Abbrev}' "$p" 2>/dev/null)" in "$v ii"*) ;; *) bad="$bad $p=$v" ;; esac; done && \
+    { [ -z "$bad" ] || { echo "vendored debs not installed at their vendored version:$bad" >&2; false; }; } && \
+    : "${SOURCE_DATE_EPOCH:?the CPython build needs SOURCE_DATE_EPOCH}" && \
+    echo "de414a57119abef52784d8993e341d53aed635fc2b05c2607d9f98a2c5b72032  /tmp/Python-3.14.10.tar.xz" | sha256sum -c - && \
+    mkdir -p /usr/src/python && tar -xJf /tmp/Python-3.14.10.tar.xz -C /usr/src/python --strip-components=1 --no-same-owner && \
+    echo "125404bb224770a1f9120b88075b252b0536e9bc348c89a3e7fb9dd19868ed7d  /tmp/cpython-3.14.10-7d9da92-fips-hashlib.diff" | sha256sum -c - && \
+    patch -p1 --no-backup-if-mismatch -d /usr/src/python -i /tmp/cpython-3.14.10-7d9da92-fips-hashlib.diff && rm -f /tmp/cpython-3.14.10-7d9da92-fips-hashlib.diff && \
+    rm -rf /tmp/cpython-debs /tmp/Python-3.14.10.tar.xz && cd /usr/src/python && \
+    export DEB_BUILD_MAINT_OPTIONS=optimize=-lto && \
+    PYCF="$(dpkg-buildflags --get CFLAGS) $(dpkg-buildflags --get CPPFLAGS)" && PYLD="$(dpkg-buildflags --get LDFLAGS)" && \
+    ./configure --build=x86_64-linux-gnu --prefix=/usr/local --enable-shared --enable-loadable-sqlite-extensions --enable-option-checking=fatal --disable-test-modules --without-static-libpython --with-ensurepip=install --with-system-expat --without-system-libmpdec --with-dbmliborder= py_cv_module__dbm=n/a py_cv_module__gdbm=n/a py_cv_module__tkinter=n/a && \
+    make -j"$(nproc)" "EXTRA_CFLAGS=$PYCF" "LDFLAGS=$PYLD,--strip-all" && \
+    rm python && make -j"$(nproc)" "EXTRA_CFLAGS=$PYCF" "LDFLAGS=$PYLD,--strip-all,-rpath='\$\$ORIGIN/../lib'" python && \
+    make install COMPILEALL_OPTS=--invalidation-mode=checked-hash && \
+    cd / && rm -rf /usr/src/python /usr/local/lib/python3.14/idlelib /usr/local/lib/python3.14/tkinter /usr/local/lib/python3.14/turtledemo /usr/local/bin/idle3* && \
+    for s in pip3 pydoc3 python3 python3-config; do ln -sfT "$s" "/usr/local/bin/${s%3*}${s#*3}"; done && \
+    ldconfig && /usr/local/bin/python3 -I -B -c "import ssl, sqlite3, zlib, bz2, lzma, ctypes, uuid, pyexpat, decimal, readline, curses, hashlib, compression.zstd, sys, importlib.util as u; bad = [m for m in ('_dbm', '_gdbm', '_tkinter') if u.find_spec(m)]; assert not bad, ('built but must not be', bad); print(sys.version.replace(chr(10), ' '), '|', ssl.OPENSSL_VERSION, '| sqlite', sqlite3.sqlite_version, '| expat', pyexpat.EXPAT_VERSION)" && \
+    ldd /usr/local/lib/python3.14/lib-dynload/_ssl.cpython-*.so | grep -qE 'libssl.so.3 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/_sqlite3.cpython-*.so | grep -qE 'libsqlite3.so.0 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/pyexpat.cpython-*.so | grep -qE 'libexpat.so.1 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/_ctypes.cpython-*.so | grep -qE 'libffi.so.8 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/_lzma.cpython-*.so | grep -qE 'liblzma.so.5 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/_bz2.cpython-*.so | grep -qE 'libbz2.so.1.0 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/_uuid.cpython-*.so | grep -qE 'libuuid.so.1 => /(usr/)?lib/x86_64-linux-gnu/' && ldd /usr/local/lib/python3.14/lib-dynload/zlib.cpython-*.so | grep -qE 'libz.so.1 => /(usr/)?lib/x86_64-linux-gnu/'
+
+# Every Python stage below starts here: one interpreter for the builders and the runtime, so compiled wheels match.
+FROM ubuntu:24.04@sha256:9c7f200c07e3d4a03e7249d2c16bf66a51120fb876aa2242cf31451412543289 AS python-base
+ENV LANG=C.UTF-8
+COPY --from=cpython /usr/local/ /usr/local/
+# ca-certificates netbase tzdata: what the official python images add to their distro base (CA roots for pip and
+# ssl, /etc/services, the zoneinfo database Django's TIME_ZONE needs); ubuntu:24.04 has none of them. Then the
+# libraries the compiled interpreter loads (gen_dockerfile.PY_SRC_RUNTIME_LIBS) -- Ubuntu debs in the SBOM.
+# ldconfig: libpython3.14.so is in /usr/local/lib. userdel: ubuntu:24.04 ships an `ubuntu` account holding uid/gid
+# 1000; removing it lets the app account keep the uid 1000 it had on the Debian base (volume ownership unchanged).
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates netbase tzdata \
+      libssl3t64 zlib1g libbz2-1.0 libsqlite3-0 libffi8 liblzma5 libzstd1 libuuid1 libexpat1 libncursesw6 libtinfo6 libreadline8t64 && \
+    rm -rf /var/lib/apt/lists/* && ldconfig && userdel --remove ubuntu && python3 --version
+
+# ---- rust toolchain on the PYTHON base (pyo3 links libpython3.14 -> must match runtime) ----
+# pyo3 reads LIBDIR from sysconfig to link libpython3.14: the relocation above is what points it at /usr/local/lib.
+ENV VENV_PATH="/ak-root/.venv" \
+    PATH="/lifecycle:/ak-root/.venv/bin:/root/.cargo/bin:$PATH" \
+    UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NATIVE_TLS=1 UV_PYTHON_DOWNLOADS=0
+WORKDIR /ak-root/
+COPY --from=ghcr.io/astral-sh/uv:0.11.5@sha256:555ac94f9a22e656fc5f2ce5dfee13b04e94d099e46bb8dd3a73ec7263f2e484 /uv /uvx /bin/
+
+# rustup-init 1.29.2 (x86_64; the fleet builds amd64 only) checked against the sha256 rust-lang publishes beside it
+# (rustup-init.sha256, read 2026-11-02); until 2026-11-02 sh.rustup.rs was piped into sh unchecked. rustup then installs
+# the toolchain rust-toolchain.toml names and checks each component against the channel manifest's sha256s.
+FROM python-base AS rust-builder
+WORKDIR /build
+COPY --from=src /src/rust-toolchain.toml ./rust-toolchain.toml
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential curl ca-certificates cmake clang golang \
+ && curl -fsSL --retry 5 -o /tmp/rustup-init \
+      https://static.rust-lang.org/rustup/archive/1.29.2/x86_64-unknown-linux-gnu/rustup-init \
+ && echo '5be191e8c70a5007074254cb74d78dbfdd25cd5a61c27de7b8e5410122ec24f4  /tmp/rustup-init' | sha256sum -c - \
+ && chmod +x /tmp/rustup-init && /tmp/rustup-init -y --profile minimal --default-toolchain none && rm /tmp/rustup-init \
+ && rustup default "$(sed -n 's/channel = "\(.*\)"/\1/p' rust-toolchain.toml)" \
+ && rustc --version
+ENV AWS_LC_FIPS_SYS_CC=clang
+COPY --from=src /src/Cargo.toml /src/Cargo.lock /src/build.rs ./
+COPY --from=src /src/.cargo ./.cargo
+COPY --from=src /src/src ./src
+COPY --from=src /src/packages/ak-axum ./packages/ak-axum
+COPY --from=src /src/packages/ak-common ./packages/ak-common
+COPY --from=src /src/packages/client-rust ./packages/client-rust
+COPY --from=src /src/authentik/lib/default.yml ./authentik/lib/default.yml
+COPY --from=src /src/website/scripts/docsmg ./website/scripts/docsmg
+# 2026.8.2's Rust supervisor embeds web assets at COMPILE time via include_str!:
+#   web/robots.txt, web/security.txt, web/dist/standalone/loading/startup.html
+# The first two are source files; the THIRD is a node-builder OUTPUT, so the Rust stage now
+# depends on the web build having run. Without these, cargo fails with
+# "couldn't read src/server/../../web/...: No such file or directory".
+COPY --from=node-builder /work/web/robots.txt ./web/robots.txt
+COPY --from=node-builder /work/web/security.txt ./web/security.txt
+COPY --from=node-builder /work/web/dist ./web/dist
+# CVE bump: quinn-proto only (quick-xml AND rustls-webpki@0.103.10 are NOT in this workspace — it is inside the
+# /bin/uv Rust binary, removed from the runtime below, the paperless uv lesson)
+# The 2026.5.5-era CVE bump (cargo update -p quinn-proto@0.11.14 --precise 0.11.15) is now
+# both OBSOLETE and FATAL: 2026.8.2 already locks quinn-proto 0.11.16, above the fix, and
+# cargo errors with "package ID specification quinn-proto@0.11.14 did not match any packages"
+# because the version it targets no longer exists. Upstream absorbed the remediation.
+RUN cargo build --package authentik --no-default-features --features core --locked --release \
+ && cp ./target/release/authentik /bin/authentik
+
+# ---- python deps (uv; source-built lxml/xmlsec/kadmin need the rust+C toolchain) ----
+FROM python-base AS python-deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config libffi-dev git curl ca-certificates \
+      libxslt1-dev zlib1g-dev libpq-dev \
+      krb5-multidev libkrb5-dev heimdal-multidev libclang-dev libltdl-dev \
+      libxmlsec1-dev xmlsec1
+COPY --from=rust-builder /root/.rustup /root/.rustup
+COPY --from=rust-builder /root/.cargo /root/.cargo
+ENV UV_NO_BINARY_PACKAGE="lxml python-kadmin-rs xmlsec"
+COPY --from=src /src/pyproject.toml /src/uv.lock /src/rust-toolchain.toml /ak-root/
+COPY --from=src /src/packages/ak-guardian /ak-root/packages/ak-guardian
+COPY --from=src /src/packages/django-channels-postgres /ak-root/packages/django-channels-postgres
+COPY --from=src /src/packages/django-dramatiq-postgres /ak-root/packages/django-dramatiq-postgres
+COPY --from=src /src/packages/django-postgres-cache /ak-root/packages/django-postgres-cache
+# CVE floors over upstream's uv.lock. certifi: 2026.8.4's lock had 2026.6.17 (2026.8.5 pins certifi==2026.10.19 itself; the floor stays as a guard), which bundles the emSign roots whose
+# intermediate CA keys were compromised (GHSA-6q48-6c7w-9gw2, CRITICAL, published 2026-10-20; fixed in 2026.10.19).
+# Scout did not report it yet; G8's OSV cross-check did (chain 571, REPUBLISH_REQUIRED). certifi is date-versioned
+# (a CA bundle with no API changes), so the floor needs no ceiling.
+# djangorestframework: 2026.8.5 pins ==3.17.1 (pyproject and uv.lock), which carries GHSA-33wh-fxxf-88vv, GHSA-3547-9m27-7rxg and
+# GHSA-xw6w-gcfp-cf8m (HIGH, published 2026-10-22), fixed only in 3.18.2; no 3.17.x fix exists. authentik main moved
+# 3.17.2 -> 3.18.0 (8c0cfae, 2026-08-17) and 3.18.1 -> 3.18.3 (223f54e, 2026-10-21) changing only pyproject.toml and
+# uv.lock (3.18.3 also adjusted one EE test, stripped here), so 3.18 needs no authentik code change. The pin is authentik's
+# own project requirement, which --no-install-project leaves uninstalled; its dependents declare no ceiling
+# (drf-spectacular 0.29.0: >=3.10.3; drf-jsonschema-serializer 3.0.0: >=3.13).
+# dnspython: the lock has 2.8.0 (email-validator 2.3.0's dependency, >=2.0.0), which carries GHSA-45c3-73f7-pv4m /
+# CVE-2026-114605 (HIGH, published 2026-10-27, dns.name.from_wire_parser() excessive CPU use), fixed only in 2.9.0;
+# dnspython has no required dependencies, so the floor moves nothing else. Ceiling: the 2.x line.
+# Ceiling: the 3.18 line (3.18.3 is 3.18.2 plus one regression fix). DRF 3.18 needs Django>=5.2 (authentik pins 5.2.17).
+# DRF goes in its OWN install with --upgrade-package, not with the floors above: uv's --upgrade upgrades EVERY package
+# in the resolution, transitive ones included (pip's default is only-if-needed), and DRF 3.18 requires django>=5.2,
+# so `--upgrade "djangorestframework>=3.18.2,<3.19"` took Django 5.2.17 -> 6.1.2 (and asgiref with it); authentik
+# pins django==5.2.17 and django-tenants failed to import under 6.1 (circular import in
+# django.db.backends.postgresql.introspection), so the server and worker exited at boot (chain 638 assemble_kit
+# SCRATCH BOOT, 2026-10-23). --upgrade-package moves DRF alone and keeps Django at the locked version, which the
+# check after it asserts: a floor that moves Django fails the vendor build here, not the boot an hour later.
+RUN cd /ak-root && uv sync --locked --no-install-project --no-dev \
+ && django_locked="$(/ak-root/.venv/bin/python -c 'import importlib.metadata as m; print(m.version("django"))')" \
+ && uv pip install --python /ak-root/.venv/bin/python --upgrade \
+      "cryptography>=48.0.1,<51" "httplib2>=0.32.0" "msgpack>=1.2.1" "PyJWT>=2.13.0" "urllib3>=2.7.0" \
+      "aiohttp>=3.14.3" "pyasn1>=0.6.4" "sqlparse>=0.6.0" "anyio>=4.14.2" "certifi>=2026.10.19" "dnspython>=2.9.0,<3" "oauthlib>=4.0.0,<5" \
+ && uv pip install --python /ak-root/.venv/bin/python --upgrade-package djangorestframework "djangorestframework>=3.18.2,<3.19" \
+ && django_now="$(/ak-root/.venv/bin/python -c 'import importlib.metadata as m; print(m.version("django"))')" \
+ && { [ "$django_now" = "$django_locked" ] || { echo "CVE floors moved Django $django_locked -> $django_now; authentik pins it exactly" >&2; false; }; }
+
+# ---- runtime ----
+FROM python-base AS runtime
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends dist-upgrade \
+ && apt-get install -y --no-install-recommends \
+      libpq5 libmaxminddb0 ca-certificates libkadm5clnt-mit12 libkadm5clnt7t64-heimdal \
+      libltdl7 libxslt1.1 libxmlsec1t64 libxmlsec1t64-openssl runit curl tzdata \
+ && apt-get clean && rm -rf /tmp/* /var/lib/apt/lists/* /var/tmp/* \
+ && groupadd --system --gid 1000 authentik \
+ && useradd --system --no-create-home --uid 1000 --gid 1000 --home-dir /authentik --shell /usr/sbin/nologin authentik \
+ && mkdir -p /certs /data /media /blueprints /geoip /authentik/.ssh /ak-root \
+ && ln -s /media /data/media \
+ && chown authentik:authentik /certs /data /data/media /media /authentik/.ssh /ak-root /blueprints
+WORKDIR /
+COPY --from=src --chown=1000:1000 /src/authentik /authentik
+COPY --from=src /src/pyproject.toml /src/uv.lock /src/manage.py /
+COPY --from=src /src/schemas /schemas
+COPY --from=src /src/locale /locale
+COPY --from=src /src/blueprints /blueprints
+COPY --from=src /src/lifecycle /lifecycle
+COPY --from=src /src/authentik/sources/kerberos/krb5.conf /etc/krb5.conf
+COPY --from=rust-builder /bin/authentik /bin/authentik
+COPY --from=go-builder /go/authentik-server /bin/authentik-server
+COPY --from=src /src/packages /ak-root/packages
+RUN ln -s /ak-root/packages /packages && chown -R authentik:authentik /ak-root
+COPY --from=python-deps /ak-root/.venv /ak-root/.venv
+COPY --from=node-builder /work/web/dist/ /web/dist/
+COPY --from=node-builder /work/web/authentik/ /web/authentik/
+# uv/uvx are BUILD-ONLY (inherited from python-base): Rust binaries bundling quick-xml (cargo
+# CVE surface). The runtime never runs uv — remove them (the paperless /opt/venv/bin/uv lesson).
+USER root
+RUN rm -f /bin/uv /bin/uvx
+USER 1000
+ENV TMPDIR=/dev/shm/ PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 GOFIPS=1
+EXPOSE 9000 9443
+ENTRYPOINT ["dumb-init", "--", "ak"]
+CMD ["allinone"]
+
+# ---- vendor export ----
+FROM runtime AS export-src
+USER root
+RUN mkdir -p /export && \
+    tar czf /export/app.tar.gz -C / authentik web lifecycle blueprints schemas locale ak-root packages geoip manage.py pyproject.toml uv.lock bin/authentik bin/authentik-server && \
+    tar czf /export/system.tar.gz --exclude='./usr/local/bin/python3*' --exclude='./usr/local/bin/python' --exclude='./usr/local/bin/python-config' --exclude='./usr/local/bin/pip*' --exclude='./usr/local/bin/pydoc*' --exclude='./usr/local/bin/idle3*' --exclude='./usr/local/lib/libpython3*' --exclude='./usr/local/lib/python3.14' --exclude='./usr/local/lib/pkgconfig/python*' --exclude='./usr/local/include/python3.14' --exclude='./usr/local/share/man/man1/python3*' --exclude=./var/cache --exclude=./var/log \
+        --exclude=./var/lib/apt/lists --exclude=./authentik --exclude=./web --exclude=./lifecycle \
+        --exclude=./blueprints --exclude=./schemas --exclude=./locale --exclude=./ak-root \
+        -C / usr etc opt var && \
+    tar czf /export/site.tar.gz -C / usr/local/lib/python3.14/site-packages && \
+    echo "vendored: $(du -sh /export | cut -f1)"
+FROM scratch AS export
+COPY --from=export-src /export/ /authentik-src/
+COPY --from=cpython-src /vendored-python/ /authentik-src/python/
+COPY --from=cpython-debs /debs/ /authentik-src/python/debs/

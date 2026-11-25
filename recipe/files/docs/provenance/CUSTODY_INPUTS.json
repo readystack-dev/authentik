@@ -1,0 +1,24 @@
+{
+  "schema": "kitforge.custody_inputs.v1",
+  "slug": "authentik",
+  "repo": "https://github.com/goauthentik/authentik",
+  "ref": "version/2026.8.5",
+  "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+  "edition": "CE",
+  "ce_audit": {
+    "ce_only": true,
+    "ee_dirs_found": [],
+    "ee_stripped": [
+      "authentik/enterprise"
+    ],
+    "allowlisted_benign_paths": [
+      "web/src/admin/enterprise",
+      "website/docs/enterprise",
+      "website/integrations/log-forwarding/splunk-enterprise",
+      "website/integrations/monitoring/splunk-enterprise"
+    ],
+    "method": "top-3-level dir scan, .git excluded, precise EE name match, strategy allowlist applied",
+    "note": "EE forks are separate products \u2014 never packaged. CE-only is pillar #1. allowlisted_benign_paths are OSS-repo artifacts named 'enterprise', NOT EE code.",
+    "rechecked_at": "package_archive"
+  }
+}

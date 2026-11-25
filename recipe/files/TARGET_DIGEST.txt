@@ -1,0 +1,8 @@
+image_manifest_digest=sha256:7741676306560bd8e052d1b9468872376109a691d582d4534b39ef1d7fcae8e7
+config_digest=sha256:fae2c3be7a2421c7b67a431d1e9637e9de5cbb5be6e4f0c94171f9139522a406
+tag=readystack/authentik:2026.8.5-CE-ubuntu24.04-r7
+probe_port=9000
+probe_path=/-/health/ready/
+probe_timeout=600
+verify_boot=skip
+verify_boot_reason=this image needs db (not part of this archive); boot it with your own services as the admin handbook describes

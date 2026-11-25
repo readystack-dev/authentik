@@ -1,0 +1,9 @@
+{
+  "schema": "kitforge.source_tree_hash.v1",
+  "slug": "authentik",
+  "repo": "https://github.com/goauthentik/authentik",
+  "ref": "version/2026.8.5",
+  "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+  "tree_listing_sha256": "45feb928b7089687fe03f0520bba32c23f9be87bf51e33786c55bb954067e01b",
+  "file_count": 6120
+}

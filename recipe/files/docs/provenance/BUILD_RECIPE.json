@@ -1,0 +1,39 @@
+{
+  "schema": "kitforge.build_recipe.v1",
+  "slug": "authentik",
+  "image": "readystack/authentik:2026.8.5-CE-ubuntu24.04-r7",
+  "build_method": "source-rebuild-python",
+  "source": {
+    "repo": "https://github.com/goauthentik/authentik",
+    "ref": "version/2026.8.5",
+    "ee_strip": [
+      "authentik/enterprise"
+    ],
+    "_ee_strip_note": "authentik/enterprise/ is under the authentik Enterprise Edition licence (authentik/enterprise/LICENSE: production use needs a subscription), not MIT. The hand kit's Dockerfile.vendor already removes it from the IMAGE; ee_strip removes it from the acquired source copy too, which ships in the sale archive (docs/source-acquisition/source). The live 2026.8.3-CE-ubuntu24.04-r1 archive (chain 458) carries 426 entries under that path because nothing stripped the copy and the CE audit's refusal did not stop the drive (fixed 2026-10-13).",
+    "python_version": "3.14",
+    "python_runtime": {
+      "provider": "ubuntu-source",
+      "version": "3.14.10",
+      "sha256": "de414a57119abef52784d8993e341d53aed635fc2b05c2607d9f98a2c5b72032",
+      "_note": "CPython 3.14.10 compiled from python.org's release tarball (sha256 from python.org's release API, scripts/cpython-pin.py) plus upstream's own fix commit 7d9da92 for CVE-2026-119170 (gh-160923, PR #160984, on CPython's 3.14 branch since 2026-11-06; a hashlib regression in 3.14.10 only, under an OpenSSL in FIPS mode; python.org has not yet released a 3.14.11), applied unmodified with `patch -p1` to the extracted source before configure (python_runtime.patches; the hand kit's vendor stage fetches the patch file, pinned by sha256, it ships in vendored/authentik-src/python/ beside the tarball, and the offline build checks and applies it again, so a customer's rebuild carries it; drop the patch when the pin moves to a release that contains it), against Ubuntu 24.04's own libraries -- libssl3t64, libsqlite3-0, zlib1g, libexpat1, libffi8, liblzma5, libbz2-1.0, libuuid1, libzstd1, libncursesw6, libreadline8t64 -- which Ubuntu's security team maintains, the scan sees as debs, and apt upgrades fix (owner decision 2026-10-10, after python-build-standalone 20261009 was found to bundle SQLite 3.53.1 with two HIGH CVEs fixed upstream four months earlier). The vendor stage only fetches the tarball and the build toolchain's debs; the compile runs in the offline (--network=none) build, reproducibly (gen_dockerfile.cpython_build_cmd: SOURCE_DATE_EPOCH, no PGO/LTO, fixed --build triple and source path, stripped, checked-hash .pyc). Never built: _dbm, _gdbm, _tkinter (no Berkeley DB, GDBM or Tk); no test suite, idle, tkinter, turtledemo or static libpython in the image. mpdecimal is the copy in CPython's own source (noble has no libmpdec). Move the pin with scripts/cpython-pin.py --write for each CPython patch release.",
+      "patches": [
+        {
+          "name": "cpython-3.14.10-7d9da92-fips-hashlib.diff",
+          "url": "https://github.com/python/cpython/commit/7d9da9208fc3dc126bebca6844dfe312afc43c34.diff",
+          "sha256": "125404bb224770a1f9120b88075b252b0536e9bc348c89a3e7fb9dd19868ed7d",
+          "commit": "7d9da9208fc3dc126bebca6844dfe312afc43c34",
+          "python_version": "3.14.10",
+          "why": "CVE-2026-119170 is a hashlib FIPS-property regression in CPython 3.14.10 only; python.org has released no 3.14.11, so the fix is taken as upstream's own commit 7d9da92 from the 3.14 branch (gh-160923 / PR #160984, 2026-11-06), applied unmodified before configure. Owner policy 2026-11-17: apply upstream's exact fix commit ourselves rather than wait, and never hand-write a fix. The sha256 is of the commit's .diff as GitHub serves it (read 2026-11-17 for homeassistant; downloaded again and re-hashed 2026-11-23)."
+        }
+      ]
+    },
+    "_source_note": "MIT core, tag version/2026.5.5 (latest GA 2026-07-15). Build mirrors upstream lifecycle/container/Dockerfile with substitutions: digest-pinned ubuntu:24.04 + CPython compiled from python.org's source against Ubuntu's libraries (source.python_runtime) (not ghcr FIPS images), enterprise/ + tests/ stripped in the src stage, GeoIP stage replaced by an empty /geoip (degrades gracefully), toolchain pins (node:24 slim for the web assets, golang:1.27.3 on Debian 12 so the CGO router links against glibc 2.36, older than the Ubuntu 24.04 runtime's 2.39, rust via rust-toolchain.toml, uv 0.11.5 \u2014 all digest-pinned). Rust supervisor links libpython via pyo3 so it builds ON the python base (upstream pattern). Python deps via uv sync --locked (first uv product); lxml/xmlsec/python-kadmin-rs stay source-built (UV_NO_BINARY_PACKAGE).",
+    "source_date_epoch": 1795407184,
+    "source_date_epoch_provenance": "the time release 2026.8.5-CE-ubuntu24.04-r7 was cut (2026-11-23T04:13:04Z), by scripts/rerelease-agenda.py: ReadyStack dates an image by when its release was packaged (owner 2026-11-10), recorded here once and used by every rebuild of the release; it builds upstream commit 4ec0d19b98da, dated 2026-10-21T11:16:54Z (source.commit_epoch).",
+    "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+    "source_date_epoch_basis": "release-cut",
+    "commit_epoch": 1792581414
+  },
+  "binaries_from_source": null,
+  "runtime_packages": null
+}
