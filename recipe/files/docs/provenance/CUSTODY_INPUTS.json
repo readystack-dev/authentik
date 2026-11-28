@@ -2,8 +2,8 @@
   "schema": "kitforge.custody_inputs.v1",
   "slug": "authentik",
   "repo": "https://github.com/goauthentik/authentik",
-  "ref": "version/2026.8.5",
-  "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+  "ref": "version/2026.8.7",
+  "commit": "37f6d5ecba4c29ad63bb60b1f0fe742560dcb050",
   "edition": "CE",
   "ce_audit": {
     "ce_only": true,

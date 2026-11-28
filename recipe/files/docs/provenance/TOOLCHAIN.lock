@@ -1,6 +1,6 @@
 {
   "build_method": "source-rebuild-python",
-  "chain_id": 1235,
+  "chain_id": 1263,
   "dep_bumps": [],
   "expected_residuals": [],
   "images": [
@@ -14,8 +14,8 @@
   "schema": "kitforge.toolchain_lock.v1",
   "slug": "authentik",
   "source": {
-    "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
-    "commit_epoch": 1792581414,
+    "commit": "37f6d5ecba4c29ad63bb60b1f0fe742560dcb050",
+    "commit_epoch": 1795625680,
     "ee_strip": [
       "authentik/enterprise"
     ],
@@ -35,11 +35,11 @@
       "version": "3.14.10"
     },
     "python_version": "3.14",
-    "ref": "version/2026.8.5",
+    "ref": "version/2026.8.7",
     "repo": "https://github.com/goauthentik/authentik",
-    "source_date_epoch": 1795543224,
+    "source_date_epoch": 1795849361,
     "source_date_epoch_basis": "release-cut",
-    "source_date_epoch_provenance": "the time release 2026.8.5-CE-ubuntu24.04-r8 was cut (2026-11-24T18:00:24Z), by scripts/rerelease-agenda.py: ReadyStack dates an image by when its release was packaged (owner 2026-11-10), recorded here once and used by every rebuild of the release; it builds upstream commit 4ec0d19b98da, dated 2026-10-21T11:16:54Z (source.commit_epoch)."
+    "source_date_epoch_provenance": "the time release 2026.8.7-CE-ubuntu24.04-r1 was cut (2026-11-28T07:02:41Z), by scripts/retarget.py: ReadyStack dates an image by when its release was packaged (owner 2026-11-10), recorded here once and used by every rebuild of the release; it builds upstream commit 37f6d5ecba4c, dated 2026-11-25T16:54:40Z (source.commit_epoch)."
   },
-  "version": "2026.8.5"
+  "version": "2026.8.7"
 }

@@ -1,5 +1,5 @@
 # =====================================================================
-# authentik 2026.8.5 (MIT core; EE components stripped) HERMETIC OFFLINE BUILD. --network=none.
+# authentik 2026.8.7 (MIT core; EE components stripped) HERMETIC OFFLINE BUILD. --network=none.
 # Reassembles the vendored built filesystem onto the PINNED public ubuntu:24.04 base.
 # =====================================================================
 # CPython 3.14.10 COMPILED HERE, offline (--network=none), from python.org's tarball (sha256 re-checked) and
@@ -64,13 +64,17 @@ CMD ["allinone"]
 # the set a generated kit carries (gen_dockerfile.label_lines). Written by scripts/kit_migrations.py;
 # scripts/retarget.py re-renders it with every retarget. Never edit it by hand.
 LABEL org.opencontainers.image.title="authentik"
-LABEL org.opencontainers.image.version="2026.8.5-CE-ubuntu24.04-r8"
+LABEL org.opencontainers.image.version="2026.8.7-CE-ubuntu24.04-r1"
 LABEL org.opencontainers.image.licenses="MIT"
-LABEL org.opencontainers.image.source="https://github.com/goauthentik/authentik"
+LABEL org.opencontainers.image.source="https://github.com/readystack-dev/authentik"
 LABEL org.opencontainers.image.vendor="ReadyStack.dev"
 LABEL readystack.product="authentik"
 LABEL readystack.edition="CE"
 LABEL readystack.license_disclosure="authentik core is MIT. The authentik/enterprise/ package (EE-licensed, source-available, not OSI) is REMOVED from this build at the source stage; the multi-tenant API (an Enterprise feature) is disabled. This is a community-only build — Enterprise features (RAC licenses etc.) are absent by design."
 LABEL org.opencontainers.image.description="authentik manages user identities and access control for your applications. It handles authentication and authorization through a single interface, eliminating the need for complex infrastructure."
-LABEL org.opencontainers.image.revision="4ec0d19b98da3c329781894cd550da95d3033954"
+LABEL org.opencontainers.image.revision="37f6d5ecba4c29ad63bb60b1f0fe742560dcb050"
+LABEL readystack.upstream.source="https://github.com/goauthentik/authentik"
+LABEL org.opencontainers.image.url="https://readystack.dev/products/authentik"
+LABEL org.opencontainers.image.documentation="https://github.com/readystack-dev/authentik#readme"
+LABEL org.opencontainers.image.authors="ReadyStack <contact@readystack.dev>"
 # <<< readystack OCI labels

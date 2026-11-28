@@ -1,5 +1,5 @@
 # =====================================================================
-# authentik 2026.8.5 (MIT core; EE components STRIPPED) VENDOR build.
+# authentik 2026.8.7 (MIT core; EE components STRIPPED) VENDOR build.
 # Modeled on upstream lifecycle/container/Dockerfile with ReadyStack substitutions:
 #  - digest-pinned ubuntu:24.04 + CPython 3.14 compiled from python.org's source against Ubuntu's libraries
 #    (the offline build compiles it again, network off) instead of ghcr FIPS images; the Go router builds on
@@ -11,9 +11,9 @@
 #    built on the python base like upstream), Python via uv sync --locked
 # Exports the built filesystem as tars for the hermetic offline reassembly (erpnext pattern).
 # =====================================================================
-ARG AUTHENTIK_VERSION=2026.8.5
-# The tag must resolve to this commit (version/2026.8.5, 2026-10-21T11:16:54Z): a moved tag fails the build.
-ARG AUTHENTIK_COMMIT=4ec0d19b98da3c329781894cd550da95d3033954
+ARG AUTHENTIK_VERSION=2026.8.7
+# The tag must resolve to this commit (version/2026.8.7, 2026-11-25T16:54:40Z): a moved tag fails the build.
+ARG AUTHENTIK_COMMIT=37f6d5ecba4c29ad63bb60b1f0fe742560dcb050
 
 # ---- source (enterprise strip happens HERE, before anything consumes the tree) ----
 # alpine/git 2.54.0 by its index digest (Docker Hub's registry, read 2026-11-02): only a git client for the clone below;
@@ -32,10 +32,14 @@ RUN git clone --depth 1 --branch version/${AUTHENTIK_VERSION} https://github.com
 #   defaults it to None and unpacks it, so without the EE code every group-membership change (add_user,
 #   remove_user, PATCH of users/groups) answered HTTP 500 "argument after ** must be a mapping, not NoneType"
 #   (live 2026.8.2-CE-trixie-r1; upstream's image returned 204).
-#   2026.8.4 (2026-10-20) and 2026.8.5 contain the same fix upstream (`**(thread_kwargs or {})`), so the sed above no longer matches and the grep guard passes; kept as a no-op for older tags.
+#   2026.8.4 (2026-10-20) and every later 2026.8 release, 2026.8.7 included, contain the same fix upstream (`**(thread_kwargs or {})`),
+#   so the sed above no longer matches and the grep guard passes; kept as a no-op for older tags.
 
 # ---- web (Lit) ----
-FROM docker.io/library/node:24.21.0-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS node-builder
+# Node 24.22.3 (nodejs.org 2026-11-10, a security release; the newest 24.x): 2026.8.6 raised the root package.json engines.node
+# and devEngines from >=24 / >=24.20 to "^24.22.1 || >=26.12.1" and .nvmrc from 24.20 to 24.22.1 (eafeb10e21), and pnpm refuses
+# an install when the project's own engines.node is not met, so the 24.21.0 pin would stop the web build.
+FROM docker.io/library/node:24.22.3-trixie-slim@sha256:4d00acb4bcc42c454c4eb801526f7ad7f772ea3bd4fd168c5cc2e384abcbb9d4 AS node-builder
 ENV NODE_ENV=production
 WORKDIR /work/web
 COPY --from=src /src/packages /work/packages
@@ -44,7 +48,7 @@ COPY --from=src /src/package.json /work/package.json
 COPY --from=src /src/pnpm-lock.yaml /work/pnpm-lock.yaml
 COPY --from=src /src/pnpm-workspace.yaml /work/pnpm-workspace.yaml
 COPY --from=src /src/website /work/website
-# 2026.8.4 and 2026.8.5 declare packageManager pnpm@11.20.0 (2026.8.3 declared 12.4.0); the pin below follows package.json (preflight check).
+# 2026.8.4 to 2026.8.7 declare packageManager pnpm@11.20.0 (2026.8.3 declared 12.4.0); the pin below follows package.json (preflight check).
 # 2026.8.2 MIGRATED npm -> pnpm: it ships pnpm-lock.yaml + pnpm-workspace.yaml and no
 # package-lock.json, so `npm ci` fails with EUSAGE ("can only install with an existing
 # package-lock.json"). Install at the WORKSPACE ROOT, then build the web package.
@@ -143,7 +147,9 @@ ENV VENV_PATH="/ak-root/.venv" \
     PATH="/lifecycle:/ak-root/.venv/bin:/root/.cargo/bin:$PATH" \
     UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_NATIVE_TLS=1 UV_PYTHON_DOWNLOADS=0
 WORKDIR /ak-root/
-COPY --from=ghcr.io/astral-sh/uv:0.11.5@sha256:555ac94f9a22e656fc5f2ce5dfee13b04e94d099e46bb8dd3a73ec7263f2e484 /uv /uvx /bin/
+# uv 0.13.4 at the digest upstream's lifecycle/container/Dockerfile names (2026.8.5 to 2026.8.7, line 83), which runs the same
+# `uv sync --locked --no-install-project --no-dev` with lxml/python-kadmin-rs/xmlsec built from source.
+COPY --from=ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b /uv /uvx /bin/
 
 # rustup-init 1.29.2 (x86_64; the fleet builds amd64 only) checked against the sha256 rust-lang publishes beside it
 # (rustup-init.sha256, read 2026-11-02); until 2026-11-02 sh.rustup.rs was piped into sh unchecked. rustup then installs
@@ -182,6 +188,9 @@ COPY --from=node-builder /work/web/dist ./web/dist
 # both OBSOLETE and FATAL: 2026.8.2 already locks quinn-proto 0.11.16, above the fix, and
 # cargo errors with "package ID specification quinn-proto@0.11.14 did not match any packages"
 # because the version it targets no longer exists. Upstream absorbed the remediation.
+# 2026.8.7 still locks quinn-proto 0.11.16, which OSV lists for RUSTSEC-2026-0340/0341 (fixed 0.11.18). quinn is reached
+# only through reqwest's http3 feature, which nothing here enables (h3 and h3-quinn, which http3 also pulls, are not in
+# Cargo.lock): the lock lists quinn only because of reqwest's weak `quinn?/rustls-aws-lc-rs` feature, so it is not compiled.
 RUN cargo build --package authentik --no-default-features --features core --locked --release \
  && cp ./target/release/authentik /bin/authentik
 
@@ -200,33 +209,31 @@ COPY --from=src /src/packages/ak-guardian /ak-root/packages/ak-guardian
 COPY --from=src /src/packages/django-channels-postgres /ak-root/packages/django-channels-postgres
 COPY --from=src /src/packages/django-dramatiq-postgres /ak-root/packages/django-dramatiq-postgres
 COPY --from=src /src/packages/django-postgres-cache /ak-root/packages/django-postgres-cache
-# CVE floors over upstream's uv.lock. certifi: 2026.8.4's lock had 2026.6.17 (2026.8.5 pins certifi==2026.10.19 itself; the floor stays as a guard), which bundles the emSign roots whose
-# intermediate CA keys were compromised (GHSA-6q48-6c7w-9gw2, CRITICAL, published 2026-10-20; fixed in 2026.10.19).
-# Scout did not report it yet; G8's OSV cross-check did (chain 571, REPUBLISH_REQUIRED). certifi is date-versioned
-# (a CA bundle with no API changes), so the floor needs no ceiling.
-# djangorestframework: 2026.8.5 pins ==3.17.1 (pyproject and uv.lock), which carries GHSA-33wh-fxxf-88vv, GHSA-3547-9m27-7rxg and
-# GHSA-xw6w-gcfp-cf8m (HIGH, published 2026-10-22), fixed only in 3.18.2; no 3.17.x fix exists. authentik main moved
-# 3.17.2 -> 3.18.0 (8c0cfae, 2026-08-17) and 3.18.1 -> 3.18.3 (223f54e, 2026-10-21) changing only pyproject.toml and
-# uv.lock (3.18.3 also adjusted one EE test, stripped here), so 3.18 needs no authentik code change. The pin is authentik's
-# own project requirement, which --no-install-project leaves uninstalled; its dependents declare no ceiling
-# (drf-spectacular 0.29.0: >=3.10.3; drf-jsonschema-serializer 3.0.0: >=3.13).
-# dnspython: the lock has 2.8.0 (email-validator 2.3.0's dependency, >=2.0.0), which carries GHSA-45c3-73f7-pv4m /
-# CVE-2026-114605 (HIGH, published 2026-10-27, dns.name.from_wire_parser() excessive CPU use), fixed only in 2.9.0;
-# dnspython has no required dependencies, so the floor moves nothing else. Ceiling: the 2.x line.
-# Ceiling: the 3.18 line (3.18.3 is 3.18.2 plus one regression fix). DRF 3.18 needs Django>=5.2 (authentik pins 5.2.17).
-# DRF goes in its OWN install with --upgrade-package, not with the floors above: uv's --upgrade upgrades EVERY package
-# in the resolution, transitive ones included (pip's default is only-if-needed), and DRF 3.18 requires django>=5.2,
-# so `--upgrade "djangorestframework>=3.18.2,<3.19"` took Django 5.2.17 -> 6.1.2 (and asgiref with it); authentik
-# pins django==5.2.17 and django-tenants failed to import under 6.1 (circular import in
-# django.db.backends.postgresql.introspection), so the server and worker exited at boot (chain 638 assemble_kit
-# SCRATCH BOOT, 2026-10-23). --upgrade-package moves DRF alone and keeps Django at the locked version, which the
-# check after it asserts: a floor that moves Django fails the vendor build here, not the boot an hour later.
+# CVE floors over upstream's uv.lock (raise-only; each names the release that fixed its advisory). authentik 2026.8.7's
+# own uv.lock meets every one of them (read at 37f6d5ecba4c): cryptography 50.0.0, httplib2 0.32.0, msgpack 1.2.3,
+# PyJWT 2.15.1, urllib3 2.8.0, aiohttp 3.14.4, pyasn1 0.6.5, sqlparse 0.6.0, anyio 4.14.2, certifi 2026.10.19,
+# dnspython 2.9.2, oauthlib 4.0.1. They stay as the guard against a lock that falls behind again, and because this
+# quoted list is where release/cve_floor.py writes a hand kit's next PyPI floor.
+# certifi: before 2026.10.19 it bundles the emSign roots whose intermediate CA keys were compromised
+# (GHSA-6q48-6c7w-9gw2, CRITICAL, published 2026-10-20; 2026.8.4's lock had 2026.6.17). Scout did not report it yet; G8's
+# OSV cross-check did (chain 571). certifi is date-versioned (a CA bundle with no API changes), so it needs no ceiling.
+# dnspython: GHSA-45c3-73f7-pv4m / CVE-2026-114605 (HIGH, published 2026-10-27), fixed in 2.9.0 (2026.8.5's lock had 2.8.0).
+# Ceiling: the 2.x line. oauthlib: GHSA-3jp2-3mrg-2vxc / CVE-2026-49272 (HIGH), floored at 4.0.0 in the 2026-10-27 CVE wave
+# (2026.8.5's lock had 3.3.1); OSV moved its fix to 4.0.1 on 2026-11-05 (released 2026-10-31), so the floor is 4.0.1. Ceiling: the 4.x line.
+# djangorestframework: 2026.8.5 pinned ==3.17.1 (GHSA-33wh-fxxf-88vv, GHSA-3547-9m27-7rxg, GHSA-xw6w-gcfp-cf8m, HIGH,
+# fixed only in 3.18.2), so earlier releases of this kit raised it to the 3.18 line in a separate --upgrade-package
+# install. 2026.8.6 and 2026.8.7 pin djangorestframework==3.18.3 themselves (pyproject and uv.lock, upstream 5324e825fb), so that install
+# is gone: uv sync installs upstream's 3.18.3.
+# Never put a package that requires Django in the --upgrade list: uv's --upgrade upgrades EVERY package in the resolution,
+# transitive ones included (pip's default is only-if-needed), and `--upgrade "djangorestframework>=3.18.2,<3.19"` took
+# Django 5.2.17 -> 6.1.2; authentik pins django exactly (==5.2.19 in 2026.8.7) and django-tenants failed to import under
+# 6.1, so the server and worker exited at boot (chain 638 assemble_kit SCRATCH BOOT, 2026-10-23). The check after the
+# floors asserts Django is still the locked version: a floor that moves it fails the vendor build here, not the boot.
 RUN cd /ak-root && uv sync --locked --no-install-project --no-dev \
  && django_locked="$(/ak-root/.venv/bin/python -c 'import importlib.metadata as m; print(m.version("django"))')" \
  && uv pip install --python /ak-root/.venv/bin/python --upgrade \
       "cryptography>=48.0.1,<51" "httplib2>=0.32.0" "msgpack>=1.2.1" "PyJWT>=2.13.0" "urllib3>=2.7.0" \
-      "aiohttp>=3.14.3" "pyasn1>=0.6.4" "sqlparse>=0.6.0" "anyio>=4.14.2" "certifi>=2026.10.19" "dnspython>=2.9.0,<3" "oauthlib>=4.0.0,<5" \
- && uv pip install --python /ak-root/.venv/bin/python --upgrade-package djangorestframework "djangorestframework>=3.18.2,<3.19" \
+      "aiohttp>=3.14.3" "pyasn1>=0.6.4" "sqlparse>=0.6.0" "anyio>=4.14.2" "certifi>=2026.10.19" "dnspython>=2.9.0,<3" "oauthlib>=4.0.1,<5" \
  && django_now="$(/ak-root/.venv/bin/python -c 'import importlib.metadata as m; print(m.version("django"))')" \
  && { [ "$django_now" = "$django_locked" ] || { echo "CVE floors moved Django $django_locked -> $django_now; authentik pins it exactly" >&2; false; }; }
 

@@ -1,6 +1,6 @@
-image_manifest_digest=sha256:ca993b4c57f308d8769039d6124cdc0151ad7fa279d2439a009be0b623cd819b
-config_digest=sha256:aaf8ffa9b66a0ecd97b6389ea77f60ed93bd0b0888c8dfe0788812662891997e
-tag=readystack/authentik:2026.8.5-CE-ubuntu24.04-r8
+image_manifest_digest=sha256:d7139aa54b1a0860b8767db21a4e3e047ba83a28ca268e30770b900f6f76465f
+config_digest=sha256:11d237dd3593cbd57e8850cca499a4ed669b773421a5cadbd8c8e27bace27ee2
+tag=readystack/authentik:2026.8.7-CE-ubuntu24.04-r1
 probe_port=9000
 probe_path=/-/health/ready/
 probe_timeout=600

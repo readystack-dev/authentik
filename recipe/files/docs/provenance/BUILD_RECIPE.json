@@ -1,11 +1,11 @@
 {
   "schema": "kitforge.build_recipe.v1",
   "slug": "authentik",
-  "image": "readystack/authentik:2026.8.5-CE-ubuntu24.04-r8",
+  "image": "readystack/authentik:2026.8.7-CE-ubuntu24.04-r1",
   "build_method": "source-rebuild-python",
   "source": {
     "repo": "https://github.com/goauthentik/authentik",
-    "ref": "version/2026.8.5",
+    "ref": "version/2026.8.7",
     "ee_strip": [
       "authentik/enterprise"
     ],
@@ -27,12 +27,12 @@
         }
       ]
     },
-    "_source_note": "MIT core, tag version/2026.5.5 (latest GA 2026-07-15). Build mirrors upstream lifecycle/container/Dockerfile with substitutions: digest-pinned ubuntu:24.04 + CPython compiled from python.org's source against Ubuntu's libraries (source.python_runtime) (not ghcr FIPS images), enterprise/ + tests/ stripped in the src stage, GeoIP stage replaced by an empty /geoip (degrades gracefully), toolchain pins (node:24 slim for the web assets, golang:1.27.3 on Debian 12 so the CGO router links against glibc 2.36, older than the Ubuntu 24.04 runtime's 2.39, rust via rust-toolchain.toml, uv 0.11.5 \u2014 all digest-pinned). Rust supervisor links libpython via pyo3 so it builds ON the python base (upstream pattern). Python deps via uv sync --locked (first uv product); lxml/xmlsec/python-kadmin-rs stay source-built (UV_NO_BINARY_PACKAGE).",
-    "source_date_epoch": 1795543224,
-    "source_date_epoch_provenance": "the time release 2026.8.5-CE-ubuntu24.04-r8 was cut (2026-11-24T18:00:24Z), by scripts/rerelease-agenda.py: ReadyStack dates an image by when its release was packaged (owner 2026-11-10), recorded here once and used by every rebuild of the release; it builds upstream commit 4ec0d19b98da, dated 2026-10-21T11:16:54Z (source.commit_epoch).",
-    "commit": "4ec0d19b98da3c329781894cd550da95d3033954",
+    "_source_note": "MIT core, tag version/2026.8.6. Build mirrors upstream lifecycle/container/Dockerfile with substitutions: digest-pinned ubuntu:24.04 + CPython compiled from python.org's source against Ubuntu's libraries (source.python_runtime) (not ghcr FIPS images), enterprise/ + tests/ stripped in the src stage, GeoIP stage replaced by an empty /geoip (degrades gracefully), toolchain pins (node:24.22.3 slim for the web assets, golang:1.27.4 on Debian 12 so the CGO router links against glibc 2.36, older than the Ubuntu 24.04 runtime's 2.39, rust via rust-toolchain.toml, uv 0.13.4 as upstream \u2014 all digest-pinned). Rust supervisor links libpython via pyo3 so it builds ON the python base (upstream pattern). Python deps via uv sync --locked (first uv product); lxml/xmlsec/python-kadmin-rs stay source-built (UV_NO_BINARY_PACKAGE).",
+    "source_date_epoch": 1795849361,
+    "source_date_epoch_provenance": "the time release 2026.8.7-CE-ubuntu24.04-r1 was cut (2026-11-28T07:02:41Z), by scripts/retarget.py: ReadyStack dates an image by when its release was packaged (owner 2026-11-10), recorded here once and used by every rebuild of the release; it builds upstream commit 37f6d5ecba4c, dated 2026-11-25T16:54:40Z (source.commit_epoch).",
+    "commit": "37f6d5ecba4c29ad63bb60b1f0fe742560dcb050",
     "source_date_epoch_basis": "release-cut",
-    "commit_epoch": 1792581414
+    "commit_epoch": 1795625680
   },
   "binaries_from_source": null,
   "runtime_packages": null
